@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>Rendszer megoldó – Felhasználói kézikönyv</title>
+</head>
+<body>
+
+  <h1>Rendszer megoldó</h1>
+  <h2>Gondolkodj rendszerben. Találd meg az összes megoldást.</h2>
+
+  <p>
+    Előfordult már, hogy egy egyenletrendszer <em>majdnem</em> megvolt,
+    de nem voltál benne biztos, hogy valóban az <strong>összes</strong>
+    megoldást megtaláltad? Hogy kézzel számolva elvesztél a lehetőségek között?
+  </p>
+
+  <p>
+    A <strong>Rendszer megoldó</strong> erre a problémára ad elegáns választ.
+    Ez az eszköz nem találgat, nem közelít — hanem következetesen,
+    lépésről lépésre végigvizsgálja a lehetőségeket, és pontosan megmutatja,
+    hol teljesülnek egyszerre a feltételeid.
+  </p>
+
+  <p>
+    Nincs telepítés, nincs regisztráció. Megnyitod a böngészőben,
+    megadod a szabályokat, és a program elvégzi helyetted a fáradságos keresést.
+    Ideális tanuláshoz, kísérletezéshez, logikai feladatokhoz és
+    minden olyan helyzethez, ahol <strong>rendszerben kell gondolkodni</strong>.
+  </p>
+
+  <p>
+    A következő fejezetekben bemutatjuk, hogyan használható az alkalmazás
+    a leghatékonyabban.
+  </p>
+
+  <h2>Az alkalmazás működésének alapelve</h2>
+
+  <p>
+    A Rendszer megoldó egyenletekkel és változókkal dolgozik.
+    A felhasználó megadja azokat a feltételeket, amelyeknek egyszerre kell teljesülniük,
+    az alkalmazás pedig megkeresi az összes olyan értékkombinációt,
+    amely megfelel ezeknek a feltételeknek.
+  </p>
+
+  <p>
+    A változókat különböző típusú <em>tokenekkel</em> lehet megadni,
+    amelyek eltérő módon viselkednek a számítás során.
+  </p>
+
+  <h2>Változótípusok</h2>
+
+  <h3>Kisbetűs változók</h3>
+
+  <p>
+    A kisbetűs változók egész számokat jelölnek.
+    Ilyen például: <code>x</code>, <code>y</code>, <code>bar</code>, <code>foo</code>.
+  </p>
+
+  <p>
+    Minden kisbetűs változóhoz meg kell adni egy minimum és egy maximum értéket.
+    A program kizárólag ezen a tartományon belül keres megoldásokat.
+  </p>
+
+  <pre>
+bar + foo = 100
+  </pre>
+
+  <h3>Kisbetűs változók szorzóval</h3>
+
+  <p>
+    Lehetőség van arra is, hogy egy változóhoz közvetlenül egy szorzót rendeljünk.
+    Például a <code>bar64</code> kifejezés jelentése:
+  </p>
+
+  <pre>
+bar × 64
+  </pre>
+
+  <p>
+    Ez a jelölés lehetővé teszi összetettebb egyenletek tömör megadását
+    külön számítások nélkül.
+  </p>
+
+  <h3>Nagybetűs változók</h3>
+
+  <p>
+    A nagybetűs változók egyetlen számjegyet jelölnek 0 és 9 között.
+    Egy nagybetű mindig ugyanazt a számjegyet jelenti az egész feladat során.
+  </p>
+
+  <p>
+    Legfeljebb tíz különböző nagybetű használható.
+    Ez a típus különösen alkalmas számjegyes és logikai feladatokhoz.
+  </p>
+
+  <pre>
+AAAA + BB = 1223
+  </pre>
+
+  <h2>Egyenletek megadása</h2>
+
+  <p>
+    Az egyenleteket soronként kell megadni.
+    Minden sor egy külön feltételt jelent, amelynek teljesülnie kell.
+  </p>
+
+  <pre>
+x + y = 10
+x - y = 2
+  </pre>
+
+  <h2>Tartományok beállítása</h2>
+
+  <p>
+    A kisbetűs változókhoz tartozó minimum és maximum értékek határozzák meg,
+    hogy a program milyen értékeket vizsgál meg.
+  </p>
+
+  <p>
+    Tartomány megadása nélkül a számítás nem indítható el.
+  </p>
+
+  <h2>Megoldás keresése</h2>
+
+  <p>
+    Miután minden egyenletet és tartományt megadtál,
+    a <strong>Megoldás keresése</strong> gomb elindítja a számítást.
+  </p>
+
+  <p>
+    A program végigpróbálja az összes lehetséges kombinációt,
+    és kilistázza azokat, amelyek minden feltételnek megfelelnek.
+  </p>
+
+  <h2>Eredmények értelmezése</h2>
+
+  <p>
+    Amennyiben létezik megoldás, a változók konkrét értékei jelennek meg.
+    Ha több megoldás is van, mindegyik külön szerepel a listában.
+  </p>
+
+  <p>
+    Ha nincs megoldás, az alkalmazás ezt egyértelműen jelzi,
+    lehetőséget adva a feltételek módosítására.
+  </p>
+
+  <h2>Összegzés</h2>
+
+  <p>
+    A Rendszer megoldó egy olyan eszköz, amely nemcsak megoldásokat ad,
+    hanem segít átlátni az összefüggéseket is.
+    Használatával a bonyolult egyenletrendszerek kezelhetővé,
+    a gondolkodás pedig strukturálttá válik.
+  </p>
+
+</body>
+</html>
