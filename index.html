@@ -42,12 +42,6 @@ bar+j=1550</textarea>
   </div>
 
 <script>
-/* Minden függvény magyar kommenttel.
-   Megvalósítás: parser -> AST; uppercase tokenek per-char; lowercase tokenok egy változó;
-   brute-force uppercase; ha uppercase kiosztva, megpróbáljuk linearizálni a rendszert
-   lowercase változókra; ha egyértelmű megoldás van, elfogadjuk; ha szabad változók
-   maradnak, enumeráljuk a tartományon belüli megoldásokat és listázzuk.
-*/
 
 // ---------- segédfüggvények: Tokenizálás, parsing ----------
 function tokenizeExpr(s){
