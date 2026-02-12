@@ -242,79 +242,102 @@ function collectVars(eqs){
 
 // ---------- Linearization for lowercase vars ----------
 function linearizeNode(node, assignUpper){
-  // returns {coeff: Map(name->frac), const: frac, nonLinear: bool}
   if(node.type === 'atom'){
     const a = node.atom;
-    if(a.kind === 'num') return {coeff: new Map(), const: F(a.value,1n), nonLinear:false};
+
+    if(a.kind === 'num')
+      return {coeff:new Map(), const:F(a.value,1n), nonLinear:false};
+
     if(a.kind === 'upperConcat'){
-      // must be fully numeric under assignUpper
-      let s = '';
+      let s='';
       for(const p of a.parts){
-        if(p.type === 'const') s += p.val.toString();
-        else {
+        if(p.type==='const') s+=p.val.toString();
+        else{
           if(!(p.name in assignUpper)) return {nonLinear:true};
-          s += String(assignUpper[p.name]);
+          s+=assignUpper[p.name];
         }
       }
-      return {coeff: new Map(), const: F(BigInt(s),1n), nonLinear:false};
+      return {coeff:new Map(), const:F(BigInt(s),1n), nonLinear:false};
     }
+
     if(a.kind === 'lower'){
-      const m = new Map();
-      m.set(a.name, F(1n,1n));
-      if(a.tail !== null){
-        m.set(a.name, Fmul(F(1n,1n), F(a.tail,1n)));
-      }
-      return {coeff: m, const: F(0n,1n), nonLinear:false};
+      const m=new Map();
+      const mul = a.tail ? a.tail : 1n;
+      m.set(a.name, F(mul,1n));
+      return {coeff:m, const:F(0n,1n), nonLinear:false};
     }
-    throw new Error('linearize: unknown atom');
   }
+
   if(node.type === 'un'){
     const R = linearizeNode(node.right, assignUpper);
     if(R.nonLinear) return {nonLinear:true};
-    const out = new Map();
-    for(const [k,v] of R.coeff) out.set(k, F(-v.n, v.d));
-    return {coeff: out, const: F(-R.const.n, R.const.d), nonLinear:false};
+
+    const out=new Map();
+    for(const [k,v] of R.coeff)
+      out.set(k, F(-v.n,v.d));
+
+    return {coeff:out, const:F(-R.const.n,R.const.d), nonLinear:false};
   }
-  // binary
+
   const L = linearizeNode(node.left, assignUpper);
   const R = linearizeNode(node.right, assignUpper);
   if(L.nonLinear || R.nonLinear) return {nonLinear:true};
-  if(node.op === '+' || node.op === '-'){
-    const res = new Map();
-    for(const [k,v] of L.coeff) res.set(k, v);
+
+  // + -
+  if(node.op==='+' || node.op==='-'){
+    const res=new Map();
+    for(const [k,v] of L.coeff) res.set(k,v);
+
     for(const [k,v] of R.coeff){
-      const cur = res.get(k) || F(0n,1n);
-      res.set(k, node.op === '+' ? Fadd(cur, v) : Fsub(cur, v));
+      const cur=res.get(k)||F(0n,1n);
+      res.set(k, node.op==='+'?Fadd(cur,v):Fsub(cur,v));
     }
-    const c = node.op === '+' ? Fadd(L.const, R.const) : Fsub(L.const, R.const);
-    return {coeff: res, const: c, nonLinear:false};
+
+    return {
+      coeff:res,
+      const: node.op==='+'?Fadd(L.const,R.const):Fsub(L.const,R.const),
+      nonLinear:false
+    };
   }
-  if(node.op === '*'){
-    const Lconst = (L.coeff.size === 0);
-    const Rconst = (R.coeff.size === 0);
-    if(Lconst && Rconst) return {coeff: new Map(), const: Fmul(L.const, R.const), nonLinear:false};
-    if(Lconst && !Rconst){
-      const factor = L.const;
-      const res = new Map();
-      for(const [k,v] of R.coeff) res.set(k, Fmul(v, factor));
-      return {coeff: res, const: Fmul(R.const, factor), nonLinear:false};
+
+  // *
+  if(node.op==='*'){
+    const Lconst = L.coeff.size===0;
+    const Rconst = R.coeff.size===0;
+
+    if(Lconst && Rconst)
+      return {coeff:new Map(), const:Fmul(L.const,R.const), nonLinear:false};
+
+    if(Lconst){
+      const res=new Map();
+      for(const [k,v] of R.coeff)
+        res.set(k, Fmul(v,L.const));
+
+      return {coeff:res, const:Fmul(R.const,L.const), nonLinear:false};
     }
-    if(Rconst && !Lconst){
-      const factor = R.const;
-      const res = new Map();
-      for(const [k,v] of L.coeff) res.set(k, Fmul(v, factor));
-      return {coeff: res, const: Fmul(L.const, factor), nonLinear:false};
+
+    if(Rconst){
+      const res=new Map();
+      for(const [k,v] of L.coeff)
+        res.set(k, Fmul(v,R.const));
+
+      return {coeff:res, const:Fmul(L.const,R.const), nonLinear:false};
     }
+
     return {nonLinear:true};
   }
-  if(node.op === '/'){
-    const Rconst = (R.coeff.size === 0);
-    if(!Rconst) return {nonLinear:true};
-    const denom = R.const;
-    const res = new Map();
-    for(const [k,v] of L.coeff) res.set(k, Fdiv(v, denom));
-    return {coeff: res, const: Fdiv(L.const, denom), nonLinear:false};
+
+  // /
+  if(node.op==='/'){
+    if(R.coeff.size!==0) return {nonLinear:true};
+
+    const res=new Map();
+    for(const [k,v] of L.coeff)
+      res.set(k, Fdiv(v,R.const));
+
+    return {coeff:res, const:Fdiv(L.const,R.const), nonLinear:false};
   }
+
   return {nonLinear:true};
 }
 
@@ -706,9 +729,12 @@ async function runSolve(){
         const Le = evalSafe(eq.left, assignUpper, {}); const Re = evalSafe(eq.right, assignUpper, {});
         if(Le && Le.error) { prune = true; break; }
         if(Re && Re.error) { prune = true; break; }
-        if(Le && Re && Le.n !== undefined && Re.n !== undefined){
-          if(!(Le.n === Re.n && Le.d === Re.d)){ prune = true; break; }
-        }
+		if(Le && Re && Le.n !== undefined && Re.n !== undefined){
+		  if(Le.d === 1n && Re.d === 1n){
+			if(Le.n !== Re.n){ prune = true; break; }
+		  }
+		}
+
       }
       if(!prune) await dfs(idx+1);
       used[d] = false; delete assignUpper[L];
