@@ -1,782 +1,632 @@
 <!doctype html>
 <html lang="hu">
 <head>
-<meta charset="utf-8"/>
-<title>Feladatmegoldó</title>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:18px;background:#fbfdff;color:#111}
-  h1{font-size:20px;margin-bottom:6px}
-  textarea{width:100%;height:140px;padding:8px;font-size:14px;box-sizing:border-box}
-  .controls{display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap}
-  button{padding:8px 12px;font-size:14px;cursor:pointer}
-  #results{margin-top:14px;background:#fff;padding:12px;border-radius:8px;box-shadow:0 2px 6px rgba(20,30,40,0.06)}
-  .small{font-size:13px;color:#444}
-  .solution{background:#eef8ff;padding:8px;border-radius:6px;margin-top:8px}
-  pre{white-space:pre-wrap;word-break:break-word}
-  input[type=number]{width:110px}
-  label.small{display:flex;gap:6px;align-items:center}
-</style>
+	<meta charset="utf-8"/>
+		<title>Feladatmegoldó</title>
+	<meta name="viewport" content="width=device-width,initial-scale=1"/>
+	<style>
+		body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:18px;background:#fbfdff;color:#111}
+		h1{font-size:20px;margin-bottom:6px}
+		textarea{width:100%;height:140px;padding:8px;font-size:14px;box-sizing:border-box}
+		.controls{display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap}
+		button{padding:8px 12px;font-size:14px;cursor:pointer}
+		#results{margin-top:14px;background:#fff;padding:12px;border-radius:8px;box-shadow:0 2px 6px rgba(20,30,40,0.06)}
+		.small{font-size:13px;color:#444}
+		.solution{background:#eef8ff;padding:8px;border-radius:6px;margin-top:8px}
+		pre{white-space:pre-wrap;word-break:break-word}
+		input[type=number]{width:110px}
+		label.small{display:flex;gap:6px;align-items:center}
+	</style>
 </head>
 <body>
-  <h1>Feladatmegoldó</h1>
-  <div><a href="https://jecf42.github.io/jecf42-06/description" target="_blank">Leírás</a>, <a href="https://jecf42.github.io/jecf42-06/simpledescription" target="_blank">Elv</a></div>
-  <textarea id="input">AAAAA+BBBB+CCC+DD+E=66067
-bar+j=1550</textarea>
-
-  <div class="controls">
-    <button id="solveBtn">Megoldás keresése</button>
-    <button id="stopBtn" disabled>Megállít</button>
-
-    <label class="small">Kisbetű tartomány — min: <input id="lmin" type="number" value="-1000000"></label>
-    <label class="small">max: <input id="lmax" type="number" value="1000000"></label>
-
-    <label class="small">Max lista (találat): <input id="maxList" type="number" value="5000" min="1" /></label>
-
-    <div class="small" id="status">Szerkesztés.</div>
-  </div>
-
-  <div id="results">
-    <div id="summary" class="small"></div>
-    <div id="solutions"></div>
-  </div>
-
+	<h1>Feladatmegoldó</h1>
+	<div><a href="https://jecf42.github.io/jecf42-06/description" target="_blank">Leírás</a>, <a href="https://jecf42.github.io/jecf42-06/simpledescription" target="_blank">Elv</a></div>
+	<textarea id="input">AAAAA+BBBB+CCC+DD+E=66067; bar+j=1550</textarea>
+	<div class="controls">
+		<button id="solveBtn">Megoldás keresése</button>
+		<button id="stopBtn" disabled>Megállít</button>
+		<label class="small">Kisbetű tartomány — min: <input id="lmin" type="number" value="-1000000"></label>
+		<label class="small">max: <input id="lmax" type="number" value="1000000"></label>
+		<label class="small">Max lista (találat): <input id="maxList" type="number" value="5000" min="1" /></label>
+		<div class="small" id="status">Szerkesztés.</div>
+	</div>
+	<div id="results">
+		<div id="summary" class="small"></div>
+		<div id="solutions"></div>
+	</div>
 <script>
-
-// ---------- segédfüggvények: Tokenizálás, parsing ----------
-function tokenizeExpr(s){
-  const toks = [];
-  let i = 0;
-  while(i < s.length){
-    const ch = s[i];
-    if(/\s/.test(ch)){ i++; continue; }
-    if(/[A-Za-z0-9]/.test(ch)){
-      let j = i+1;
-      while(j < s.length && /[A-Za-z0-9]/.test(s[j])) j++;
-      toks.push({type:'atom', text: s.slice(i,j)});
-      i = j; continue;
-    }
-    if("+-*/^()".includes(ch)){
-      if(ch === '(' || ch === ')') toks.push({type:'paren', text:ch});
-      else toks.push({type:'op', text:ch});
-      i++; continue;
-    }
-    throw new Error('Ismeretlen karakter: ' + ch);
-  }
-  return toks;
-}
-
-// parse atom structure per szabályok
-function parseAtomStructure(t){
-  // tiltott: betű-szám-betű (kisbetűs esetben)
-  if(/[a-z][0-9]+[a-z]/.test(t)) throw new Error('Tiltott minta: betű-szám-betű ('+t+')');
-
-  if(/^[0-9]+$/.test(t)) return {kind:'num', value: BigInt(t)};
-
-  // kisbetűs + optional trailing number (mul)
-  if(/^[a-z]+[0-9]*$/.test(t)){
-    const m = t.match(/^([a-z]+)([0-9]*)$/);
-    const name = m[1];
-    const tail = m[2] ? BigInt(m[2]) : null;
-    return {kind: 'lower', name, tail};
-  }
-
-  // nagybetű és szám kombináció: concatenation of chars (per-char substitution)
-  if(/^[A-Z0-9]+$/.test(t)){
-    const parts = [];
-    for(const ch of t){
-      if(/[A-Z]/.test(ch)) parts.push({type:'dig', name:ch});
-      else parts.push({type:'const', val: BigInt(ch)});
-    }
-    return {kind:'upperConcat', parts};
-  }
-
-  throw new Error('Érvénytelen atom: ' + t);
-}
-
-// shunting-yard -> AST (support unary minus 'u-')
-const PRE = { 'u-':4, '^':3, '*':2, '/':2, '+':1, '-':1 };
-const RIGHT = { '^': true, 'u-': true };
-
-function parseToAST(tokens){
-  const out = [], ops = [];
-  let prevIsOperand = false;
-  for(const tk of tokens){
-    if(tk.type === 'atom'){
-      out.push({type:'atom', atom: parseAtomStructure(tk.text)});
-      prevIsOperand = true;
-    } else if(tk.type === 'op'){
-      let op = tk.text;
-      if(op === '-' && !prevIsOperand) op = 'u-';
-      while(ops.length){
-        const top = ops[ops.length-1];
-        if(top.type === 'op'){
-          const p1 = PRE[op], p2 = PRE[top.op];
-          if((RIGHT[op] ? p1 < p2 : p1 <= p2)){
-            ops.pop();
-            if(top.op === 'u-'){ const a = out.pop(); out.push({type:'un', op:'u-', right:a}); }
-            else { const b = out.pop(), a = out.pop(); out.push({type:'bin', op: top.op, left:a, right:b}); }
-            continue;
-          }
-        }
-        break;
-      }
-      ops.push({type:'op', op});
-      prevIsOperand = false;
-    } else if(tk.type === 'paren'){
-      if(tk.text === '('){ ops.push({type:'paren'}); prevIsOperand = false; }
-      else {
-        let found = false;
-        while(ops.length){
-          const top = ops.pop();
-          if(top.type === 'paren'){ found = true; break; }
-          if(top.type === 'op'){
-            if(top.op === 'u-'){ const a = out.pop(); out.push({type:'un', op:'u-', right:a}); }
-            else { const b = out.pop(), a = out.pop(); out.push({type:'bin', op: top.op, left:a, right:b}); }
-          }
-        }
-        if(!found) throw new Error('Zárójel párhiba: hiányzik "("');
-        prevIsOperand = true;
-      }
-    }
-  }
-  while(ops.length){
-    const top = ops.pop();
-    if(top.type === 'paren') throw new Error('Zárójel párhiba: hiányzik ")"');
-    if(top.op === 'u-'){ const a = out.pop(); out.push({type:'un', op:'u-', right:a}); }
-    else { const b = out.pop(), a = out.pop(); out.push({type:'bin', op: top.op, left:a, right:b}); }
-  }
-  if(out.length !== 1) throw new Error('Parszolási hiba');
-  return out[0];
-}
-
-// ---------- BigInt fraction helpers ----------
-function gcd(a,b){ a = a < 0n ? -a : a; b = b < 0n ? -b : b; while(b !== 0n){ const t = a % b; a = b; b = t; } return a; }
-function F(n,d=1n){ if(d===0n) throw new Error('Nullával osztás'); if(d<0n){ n=-n; d=-d; } const g = gcd(n,d); return {n: n/g, d: d/g}; }
-function Fadd(a,b){ return F(a.n*b.d + b.n*a.d, a.d*b.d); }
-function Fsub(a,b){ return F(a.n*b.d - b.n*a.d, a.d*b.d); }
-function Fmul(a,b){ return F(a.n*b.n, a.d*b.d); }
-function Fdiv(a,b){ if(b.n===0n) throw new Error('Nullával osztás'); return F(a.n*b.d, a.d*b.n); }
-
-// ---------- evaluate AST with given assignments ----------
-// assignUpper: { 'A':digit, ... }  digits 0..9
-// assignLower: { 'bar': BigInt(...), ... } integers within provided range
-function evalAtom(atom, assignUpper, assignLower){
-  if(atom.kind === 'num') return F(atom.value, 1n);
-  if(atom.kind === 'lower'){
-    if(!(atom.name in assignLower)) return null;
-    let val = BigInt(assignLower[atom.name]);
-    if(atom.tail !== null) val = val * atom.tail;
-    return F(val, 1n);
-  }
-  if(atom.kind === 'upperConcat'){
-    let s = '';
-    for(const p of atom.parts){
-      if(p.type === 'const'){ s += p.val.toString(); }
-      else {
-        if(!(p.name in assignUpper)) return null;
-        s += String(assignUpper[p.name]);
-      }
-    }
-    return F(BigInt(s), 1n);
-  }
-  throw new Error('Ismeretlen atom típus');
-}
-
-function evalAST(node, assignUpper, assignLower){
-  if(node.type === 'atom') return evalAtom(node.atom, assignUpper, assignLower);
-  if(node.type === 'un'){
-    const R = evalAST(node.right, assignUpper, assignLower);
-    if(!R) return null;
-    return F(-R.n, R.d);
-  }
-  const L = evalAST(node.left, assignUpper, assignLower);
-  const R = evalAST(node.right, assignUpper, assignLower);
-  if(!L || !R) return null;
-  switch(node.op){
-    case '+': return Fadd(L,R);
-    case '-': return Fsub(L,R);
-    case '*': return Fmul(L,R);
-    case '/': return Fdiv(L,R);
-    case '^': throw new Error('Hatványozás nem támogatott itt');
-    default: throw new Error('Ismeretlen operátor: '+node.op);
-  }
-}
-
-// safe eval wrapper
-function evalSafe(node, assignUpper, assignLower){
-  try{ return evalAST(node, assignUpper, assignLower); }catch(e){ return {error:e}; }
-}
-
-// ---------- parse system ----------
-function parseSystem(text){
-  const lines = text.split(/\r?\n|;/).map(s=>s.trim()).filter(Boolean);
-  if(lines.length === 0) throw new Error('Nincs megadva egyenlet.');
-  const eqs = [];
-  for(const L of lines){
-    const parts = L.split('=');
-    if(parts.length !== 2) throw new Error('Minden egyenlet pontosan egy "=" kell hogy tartalmazzon: ' + L);
-    const left = parseToAST(tokenizeExpr(parts[0].trim()));
-    const right = parseToAST(tokenizeExpr(parts[1].trim()));
-    eqs.push({raw:L, left, right});
-  }
-  return eqs;
-}
-
-// collect variables
-function collectVars(eqs){
-  const upp = new Set(), low = new Set();
-  function walk(n){
-    if(n.type === 'atom'){
-      const a = n.atom;
-      if(a.kind === 'lower') low.add(a.name);
-      if(a.kind === 'upperConcat') for(const p of a.parts) if(p.type==='dig') upp.add(p.name);
-      return;
-    }
-    if(n.type === 'un'){ walk(n.right); return; }
-    walk(n.left); walk(n.right);
-  }
-  for(const e of eqs){ walk(e.left); walk(e.right); }
-  return {upper: Array.from(upp), lower: Array.from(low)};
-}
-
-// ---------- Linearization for lowercase vars ----------
-function linearizeNode(node, assignUpper){
-  if(node.type === 'atom'){
-    const a = node.atom;
-
-    if(a.kind === 'num')
-      return {coeff:new Map(), const:F(a.value,1n), nonLinear:false};
-
-    if(a.kind === 'upperConcat'){
-      let s='';
-      for(const p of a.parts){
-        if(p.type==='const') s+=p.val.toString();
-        else{
-          if(!(p.name in assignUpper)) return {nonLinear:true};
-          s+=assignUpper[p.name];
-        }
-      }
-      return {coeff:new Map(), const:F(BigInt(s),1n), nonLinear:false};
-    }
-
-    if(a.kind === 'lower'){
-      const m=new Map();
-      const mul = a.tail ? a.tail : 1n;
-      m.set(a.name, F(mul,1n));
-      return {coeff:m, const:F(0n,1n), nonLinear:false};
-    }
-  }
-
-  if(node.type === 'un'){
-    const R = linearizeNode(node.right, assignUpper);
-    if(R.nonLinear) return {nonLinear:true};
-
-    const out=new Map();
-    for(const [k,v] of R.coeff)
-      out.set(k, F(-v.n,v.d));
-
-    return {coeff:out, const:F(-R.const.n,R.const.d), nonLinear:false};
-  }
-
-  const L = linearizeNode(node.left, assignUpper);
-  const R = linearizeNode(node.right, assignUpper);
-  if(L.nonLinear || R.nonLinear) return {nonLinear:true};
-
-  // + -
-  if(node.op==='+' || node.op==='-'){
-    const res=new Map();
-    for(const [k,v] of L.coeff) res.set(k,v);
-
-    for(const [k,v] of R.coeff){
-      const cur=res.get(k)||F(0n,1n);
-      res.set(k, node.op==='+'?Fadd(cur,v):Fsub(cur,v));
-    }
-
-    return {
-      coeff:res,
-      const: node.op==='+'?Fadd(L.const,R.const):Fsub(L.const,R.const),
-      nonLinear:false
-    };
-  }
-
-  // *
-  if(node.op==='*'){
-    const Lconst = L.coeff.size===0;
-    const Rconst = R.coeff.size===0;
-
-    if(Lconst && Rconst)
-      return {coeff:new Map(), const:Fmul(L.const,R.const), nonLinear:false};
-
-    if(Lconst){
-      const res=new Map();
-      for(const [k,v] of R.coeff)
-        res.set(k, Fmul(v,L.const));
-
-      return {coeff:res, const:Fmul(R.const,L.const), nonLinear:false};
-    }
-
-    if(Rconst){
-      const res=new Map();
-      for(const [k,v] of L.coeff)
-        res.set(k, Fmul(v,R.const));
-
-      return {coeff:res, const:Fmul(L.const,R.const), nonLinear:false};
-    }
-
-    return {nonLinear:true};
-  }
-
-  // /
-  if(node.op==='/'){
-    if(R.coeff.size!==0) return {nonLinear:true};
-
-    const res=new Map();
-    for(const [k,v] of L.coeff)
-      res.set(k, Fdiv(v,R.const));
-
-    return {coeff:res, const:Fdiv(L.const,R.const), nonLinear:false};
-  }
-
-  return {nonLinear:true};
-}
-
-// Solve linear system with fractions (Gauss-Jordan). A: rows x cols (fractions), b: rows array
-// Returns object {sol: array(frac)} if unique integer solution, or null if none/inf
-function solveLinearFractions(A, b){
-  const m = A.length;
-  if(m === 0) return null;
-  const n = A[0].length;
-  // build augmented matrix with fractions as BigInt pairs (n,d) but we already store as same frac objects
-  // We'll operate in rationals by converting to common fractions with BigInt arithmetic
-  // Build M as copy
-  const M = new Array(m);
-  for(let i=0;i<m;i++){ M[i] = new Array(n+1); for(let j=0;j<n;j++) M[i][j] = A[i][j]; M[i][n] = b[i]; }
-
-  let row = 0;
-  for(let col=0; col<n && row < m; col++){
-    // find pivot
-    let sel = -1;
-    for(let i=row;i<m;i++) if(M[i][col].n !== 0n){ sel = i; break; }
-    if(sel === -1) continue;
-    [M[row], M[sel]] = [M[sel], M[row]];
-    // normalize pivot row
-    const piv = M[row][col];
-    for(let j=col;j<=n;j++) M[row][j] = Fdiv(M[row][j], piv);
-    // eliminate
-    for(let i=0;i<m;i++){
-      if(i === row) continue;
-      const factor = M[i][col];
-      if(factor.n === 0n) continue;
-      for(let j=col;j<=n;j++){
-        M[i][j] = Fsub(M[i][j], Fmul(factor, M[row][j]));
-      }
-    }
-    row++;
-  }
-
-  // check inconsistency
-  for(let i=0;i<m;i++){
-    let allzero = true;
-    for(let j=0;j<n;j++) if(M[i][j].n !== 0n){ allzero = false; break; }
-    if(allzero && M[i][n].n !== 0n) return null;
-  }
-
-  // rank check
-  let rank = 0;
-  for(let i=0;i<m;i++){
-    let nz=false;
-    for(let j=0;j<n;j++) if(M[i][j].n !== 0n){ nz=true; break; }
-    if(nz) rank++;
-  }
-  if(rank < n) return null; // infinite solutions
-
-  const sol = new Array(n).fill(null);
-  for(let i=0;i<m;i++){
-    let lead = -1;
-    for(let j=0;j<n;j++) if(M[i][j].n !== 0n){ lead = j; break; }
-    if(lead === -1) continue;
-    sol[lead] = M[i][n];
-  }
-  for(let j=0;j<n;j++) if(sol[j] === null) return null;
-  return {sol};
-}
-
-// Try to deduce lowercase vars given upper assignment and equations.
-// lowerNames: array of names in fixed order; returns either:
-// - an array of solution-maps (each map: name->BigInt) possibly many (when free vars enumerated within min..max)
-// - null if impossible or no constraints
-function deduceLowers(eqs, assignUpper, lowerNames, minV, maxV, maxList){
-  if(lowerNames.length === 0) return [{}];
-
-  // build linear equations: collect only those equations that linearize
-  const rowsA = [], rowsB = [];
-  for(const eq of eqs){
-    const L = linearizeNode(eq.left, assignUpper);
-    const R = linearizeNode(eq.right, assignUpper);
-    if(L.nonLinear || R.nonLinear) continue;
-    // build coefficient row: L.coeff - R.coeff; RHS = R.const - L.const
-    const row = new Array(lowerNames.length).fill(F(0n,1n));
-    for(const [k,v] of L.coeff) {
-      const idx = lowerNames.indexOf(k);
-      if(idx === -1) return null; // variable outside expected set -> abort
-      row[idx] = Fadd(row[idx], v);
-    }
-    for(const [k,v] of R.coeff){
-      const idx = lowerNames.indexOf(k);
-      if(idx === -1) return null;
-      row[idx] = Fsub(row[idx], v);
-    }
-    const rhs = Fsub(R.const, L.const);
-    // if all zero coefficients:
-    let allZero = true;
-    for(const c of row) if(c.n !== 0n){ allZero = false; break; }
-    if(allZero){
-      if(rhs.n !== 0n) return null; // inconsistent
-      else continue; // redundant eq
-    }
-    rowsA.push(row);
-    rowsB.push(rhs);
-  }
-
-  if(rowsA.length === 0){
-    // no linear constraints -> full freedom: enumerate all combinations in range (careful with combinatorial explosion)
-    // If there are many variables, enumeration could be huge; guard with maxList
-    const N = lowerNames.length;
-    // If N large, avoid full enumeration
-    if(N === 0) return [{}];
-    // simple enumeration depth-first
-    const results = [];
-    const assign = {};
-    function dfsEnum(idx){
-      if(results.length >= maxList) return;
-      if(idx === N){
-        // record map with BigInt values
-        const out = {};
-        for(let i=0;i<N;i++) out[lowerNames[i]] = BigInt(assign[i]);
-        results.push(out);
-        return;
-      }
-      for(let v = minV; v <= maxV; v++){
-        assign[idx] = v;
-        dfsEnum(idx+1);
-        if(results.length >= maxList) return;
-      }
-    }
-    dfsEnum(0);
-    return results;
-  }
-
-  // convert rowsA and rowsB into numeric arrays for solver
-  // A: rows x cols, each entry is fraction
-  const A = [];
-  for(const r of rowsA){
-    A.push(r.map(x=>x));
-  }
-  const B = rowsB.map(x=>x);
-
-  const solRes = solveLinearFractions(A, B);
-  if(solRes === null){
-    // either no solution or infinite solution -> we need to enumerate free vars
-    // We'll attempt to put matrix into reduced row echelon ourselves and detect free vars
-
-    // Quick approach: do Gaussian elimination on integer matrix by clearing denominators per row
-    // Build integer augmented matrix: multiply each row by lcm of denominators
-    const intA = [];
-    const intB = [];
-    for(let i=0;i<A.length;i++){
-      // find lcm of denominators in this row and RHS
-      let l = 1n;
-      for(const c of A[i]) l = (l * c.d) / gcd(l, c.d);
-      l = (l * B[i].d) / gcd(l, B[i].d);
-      // multiply
-      const rowInt = A[i].map(c => (c.n * (l / c.d)));
-      const rhsInt = B[i].n * (l / B[i].d);
-      intA.push(rowInt);
-      intB.push(rhsInt);
-    }
-    // Now have integer linear system intA * x = intB
-    // We'll perform row-reduction to get basic vars and free vars
-    const rows = intA.length, cols = lowerNames.length;
-    // build M
-    const M = Array.from({length:rows}, (_,i)=> intA[i].slice().concat([intB[i]]));
-    let r = 0;
-    const pivotAt = Array(cols).fill(-1);
-    for(let c=0;c<cols && r<rows;c++){
-      // find pivot
-      let sel = -1;
-      for(let i=r;i<rows;i++) if(M[i][c] !== 0n){ sel = i; break; }
-      if(sel === -1) continue;
-      [M[r], M[sel]] = [M[sel], M[r]];
-      // normalize pivot to 1 by dividing row by pivot value (we keep integers by using rational later)
-      const piv = M[r][c];
-      // eliminate other rows
-      for(let i=0;i<rows;i++){
-        if(i===r) continue;
-        const f = M[i][c];
-        if(f === 0n) continue;
-        // M[i] = M[i] * piv - M[r] * f
-        for(let j=c;j<=cols;j++){
-          M[i][j] = M[i][j]*piv - M[r][j]*f;
-        }
-      }
-      pivotAt[c] = r;
-      r++;
-    }
-    // Identify free variables (cols where pivotAt[c] == -1)
-    const freeIdx = [];
-    for(let c=0;c<cols;c++) if(pivotAt[c] === -1) freeIdx.push(c);
-    // If no free variable found but inconsistent: no solution
-    // Check inconsistency
-    for(let i=0;i<rows;i++){
-      let allZero = true;
-      for(let j=0;j<cols;j++) if(M[i][j] !== 0n){ allZero = false; break; }
-      if(allZero && M[i][cols] !== 0n) return null;
-    }
-    // Now enumerate free variables within min..max and solve for other variables (using original rational solve)
-    const results = [];
-    const Nfree = freeIdx.length;
-    if(Nfree === 0) return null;
-    // produce system A * x = B in rationals and solve for given free assignments by substitution using rational arithmetic
-    // We'll express x = particular + sum_k (free_k * vect_k) ... but easier: brute-force free vars and solve remaining as linear system for unique solution
-    function tryFreeAssign(freeAssign){
-      // build new A2, B2 by substituting free variables to RHS
-      const A2 = [];
-      const B2 = [];
-      for(let i=0;i<rows;i++){
-        // row: sum_j A[i][j] * x_j = B[i]
-        let rhs = B[i]; // fraction
-        const rowCoeffs = [];
-        for(let j=0;j<cols;j++){
-          rowCoeffs.push(A[i][j]);
-        }
-        for(const idx of freeIdx){
-          const val = F(BigInt(freeAssign[idx]), 1n);
-          rhs = Fsub(rhs, Fmul(rowCoeffs[idx], val));
-        }
-        // build reduced row with non-free columns
-        const newRow = [];
-        for(let j=0;j<cols;j++) if(!freeIdx.includes(j)) newRow.push(rowCoeffs[j]);
-        A2.push(newRow);
-        B2.push(rhs);
-      }
-      // Solve A2 * x_free = B2 for variables that are not free (should be square)
-      // Map non-free indices
-      const nonFreeIdx = [];
-      for(let j=0;j<cols;j++) if(!freeIdx.includes(j)) nonFreeIdx.push(j);
-      if(nonFreeIdx.length === 0){
-        // all free: any assignment is solution => accept current freeAssign as one solution
-        const sol = {};
-        for(let j=0;j<cols;j++){
-          if(freeIdx.includes(j)) sol[ lowerNames[j] ] = BigInt(freeAssign[j]);
-          else sol[ lowerNames[j] ] = 0n; // arbitrary
-        }
-        results.push(sol);
-        return;
-      }
-      // Build A2 matrix dims rows x nonFree
-      // We need square system; if rows != nonFree, try to solve via linear fractions solver
-      // Create matrix with proper columns
-      const A2full = [];
-      for(let i=0;i<A2.length;i++){
-        const row = [];
-        for(const j of nonFreeIdx) row.push(A[i][j]);
-        A2full.push(row);
-      }
-      const solR = solveLinearFractions(A2full, B2);
-      if(solR === null) return;
-      const solArr = solR.sol;
-      // build full solution
-      const full = {};
-      for(let k=0;k<cols;k++){
-        if(freeIdx.includes(k)) full[ lowerNames[k] ] = BigInt(freeAssign[k]);
-      }
-      for(let t=0;t<nonFreeIdx.length;t++){
-        const idx = nonFreeIdx[t];
-        const f = solArr[t];
-        if(f.d !== 1n) return; // non-integer -> discard
-        full[ lowerNames[idx] ] = f.n;
-      }
-      results.push(full);
-    }
-
-    // enumerate free variables
-    // caution: combinatorial explosion — guard with maxList
-    let stop = false;
-    const stack = [];
-    function dfsFree(pos){
-      if(stop) return;
-      if(pos === freeIdx.length){
-        // build map freeAssign indexed by column index
-        const freeAssign = {};
-        for(let i=0;i<freeIdx.length;i++) freeAssign[ freeIdx[i] ] = stack[i];
-        tryFreeAssign(freeAssign);
-        if(results.length >= maxList) stop = true;
-        return;
-      }
-      for(let v=minV; v<=maxV; v++){
-        stack[pos] = v;
-        dfsFree(pos+1);
-        if(stop) return;
-      }
-    }
-    dfsFree(0);
-    return results;
-  } else {
-    // unique rational solution -> check integer solution
-    const sol = solRes.sol; // fractions array, length = lowerNames.length
-    const out = {};
-    for(let i=0;i<sol.length;i++){
-      const f = sol[i];
-      if(f.d !== 1n) return null; // not integer
-      out[ lowerNames[i] ] = f.n;
-      if(out[ lowerNames[i] ] < BigInt(minV) || out[ lowerNames[i] ] > BigInt(maxV)) return null;
-    }
-    return [out];
-  }
-}
-
-// ---------- main solver: brute-force uppercase, deduce/lists lowers ----------
-const solveBtn = document.getElementById('solveBtn');
-const stopBtn = document.getElementById('stopBtn');
-const statusEl = document.getElementById('status');
-const solBox = document.getElementById('solutions');
-const summary = document.getElementById('summary');
-
-let shouldStop = false;
-stopBtn.onclick = ()=>{ shouldStop = true; statusEl.textContent = 'Megszakítás folyamatban...'; };
-
-solveBtn.onclick = async ()=>{
-  shouldStop = false;
-  solBox.innerHTML = ''; summary.textContent = '';
-  statusEl.textContent = 'Előkészítés...';
-  solveBtn.disabled = true; stopBtn.disabled = false;
-
-  setTimeout(async ()=>{
-    try{
-      await runSolve();
-    } finally {
-      solveBtn.disabled = false; stopBtn.disabled = true;
-    }
-  }, 20);
-};
-
-async function runSolve(){
-  solBox.innerHTML = ''; summary.textContent = '';
-  statusEl.textContent = 'Parszolás...';
-
-  let eqs;
-  try{ eqs = parseSystem(document.getElementById('input').value); }
-  catch(e){ statusEl.textContent = 'Parszolási hiba: ' + e.message; return; }
-
-  const {upper, lower} = collectVars(eqs);
-  if(upper.length > 10){ statusEl.textContent = 'Több mint 10 különböző nagybetű: nem megoldható (0..9 korlát).'; return; }
-
-  const minV = Number(document.getElementById('lmin').value);
-  const maxV = Number(document.getElementById('lmax').value);
-  const maxList = Math.max(1, Number(document.getElementById('maxList').value)||5000);
-
-  if(Number.isNaN(minV) || Number.isNaN(maxV) || minV > maxV){ statusEl.textContent = 'Érvénytelen tartomány.'; return; }
-
-  statusEl.textContent = `Keresés: ${upper.length} nagybetű; ${lower.length} kisbetű (tartomány ${minV}..${maxV}) — fut...`;
-
-  const letters = upper.slice();
-  // frequency heuristic
-  const freq = {}; for(const L of letters) freq[L] = 0;
-  function countFreq(n){
-    if(n.type==='atom'){ if(n.atom.kind==='upperConcat'){ for(const p of n.atom.parts) if(p.type==='dig') freq[p.name]++; } return; }
-    if(n.type==='un') return countFreq(n.right);
-    countFreq(n.left); countFreq(n.right);
-  }
-  for(const e of eqs){ countFreq(e.left); countFreq(e.right); }
-  letters.sort((a,b)=> freq[b]-freq[a]);
-
-  const used = new Array(10).fill(false);
-  const assignUpper = {};
-  const solutions = [];
-  let nodes = 0;
-  const YIELD = 1000;
-  let steps = 0;
-
-  async function dfs(idx){
-    if(shouldStop) return;
-    if(idx === letters.length){
-      nodes++; steps++;
-      // uppercase fully assigned -> deduce lowers
-      const lowerRes = deduceLowers(eqs, assignUpper, lower, minV, maxV, maxList);
-      if(lowerRes && lowerRes.length > 0){
-        for(const lr of lowerRes){
-          solutions.push({upper: Object.assign({}, assignUpper), lower: lr});
-          if(solutions.length >= maxList){ shouldStop = true; break; }
-        }
-      }
-      if(steps >= YIELD){ steps = 0; await new Promise(r=>setTimeout(r,0)); }
-      return;
-    }
-    nodes++; steps++;
-    if(steps >= YIELD){ steps = 0; await new Promise(r=>setTimeout(r,0)); if(shouldStop) return; }
-
-    const L = letters[idx];
-    for(let d=0; d<=9; d++){
-      if(shouldStop) return;
-      if(used[d]) continue;
-      // assign
-      used[d] = true;
-      assignUpper[L] = d;
-      // quick partial prune: try evaluate any eq that becomes fully numeric (without lowers)
-      let prune = false;
-      for(const eq of eqs){
-        const Le = evalSafe(eq.left, assignUpper, {}); const Re = evalSafe(eq.right, assignUpper, {});
-        if(Le && Le.error) { prune = true; break; }
-        if(Re && Re.error) { prune = true; break; }
-		if(Le && Re && Le.n !== undefined && Re.n !== undefined){
-		  if(Le.d === 1n && Re.d === 1n){
-			if(Le.n !== Re.n){ prune = true; break; }
-		  }
+	function tokenizeExpr(s){
+		const toks = [];
+		let i = 0;
+		while(i < s.length){
+			const ch = s[i];
+			if(/\s/.test(ch)){ i++; continue; }
+			if(/[A-Za-z0-9]/.test(ch)){
+				let j = i+1;
+				while(j < s.length && /[A-Za-z0-9]/.test(s[j])) j++;
+				toks.push({type:'atom', text: s.slice(i,j)});
+				i = j; continue;
+			}
+			let op = ch;
+			if(ch === '×') op = '*';
+			if(ch === '÷' || ch === ':') op = '/';
+			if("+-*/^()".includes(op)){
+				if(op === '(' || op === ')') toks.push({type:'paren', text:op});
+				else toks.push({type:'op', text:op});
+				i++; continue;
+			}
+			throw new Error('Ismeretlen karakter: ' + ch);
 		}
-
-      }
-      if(!prune) await dfs(idx+1);
-      used[d] = false; delete assignUpper[L];
-      if(shouldStop) return;
-    }
-  }
-
-  await dfs(0);
-
-  stopBtn.disabled = true;
-  statusEl.textContent = `Kész: talált megoldások: ${solutions.length}. Ellenőrzött csomópontok: ${nodes}.`;
-
-  if(solutions.length === 0){ summary.textContent = 'Nincs megoldás.'; return; }
-
-  summary.textContent = `Megoldások száma: ${solutions.length}${solutions.length>=maxList? ' (lista korlátozva)':''}.`;
-  solBox.innerHTML = '';
-  for(let i=0;i<solutions.length;i++){
-    const s = solutions[i];
-    const div = document.createElement('div'); div.className = 'solution';
-    const up = Object.keys(s.upper).sort().map(k=>k+'='+s.upper[k]).join(', ');
-    const low = Object.keys(s.lower).sort().map(k=>k+'='+s.lower[k].toString()).join(', ');
-    // render numeric equations
-    const eqHtml = eqs.map(eq=>{
-      function renderNode(n){
-        if(n.type==='atom'){
-          const a=n.atom;
-          if(a.kind==='num') return a.value.toString();
-          if(a.kind==='upperConcat') return a.parts.map(p=> p.type==='const' ? p.val.toString() : s.upper[p.name]).join('');
-          if(a.kind==='lower') return (s.lower[a.name] !== undefined ? s.lower[a.name].toString() : a.name);
-        }
-        if(n.type==='un') return '(-' + renderNode(n.right) + ')';
-        return '(' + renderNode(n.left) + ' ' + n.op + ' ' + renderNode(n.right) + ')';
-      }
-      const Ls = renderNode(eq.left); const Rs = renderNode(eq.right);
-      const Lval = evalAST(eq.left, s.upper, s.lower); const Rval = evalAST(eq.right, s.upper, s.lower);
-      function fracStr(f){ if(!f) return 'n/a'; return f.d===1n? f.n.toString() : f.n.toString()+'/'+f.d.toString(); }
-      return `${eq.raw}  →  ${Ls} = ${Rs} `;
-    }).join('<br>');
-    div.innerHTML = `<b>#${i+1}</b> — Nagybetűk: ${up} | Kisbetűk: ${low}<br><span class="small">${eqHtml}</span>`;
-    solBox.appendChild(div);
-  }
-}
+		return toks;
+	}
+	function parseAtomStructure(t){
+		if(/[a-z][0-9]+[a-z]/.test(t)) throw new Error('Nem megfelelő minta: betű-szám-betű ('+t+')');
+		if(/^[0-9]+$/.test(t)) return {kind:'num', value: BigInt(t)};
+		if(/^[a-z]+[0-9]*$/.test(t)){
+			const m = t.match(/^([a-z]+)([0-9]*)$/);
+			const name = m[1];
+			const tail = m[2] ? BigInt(m[2]) : null;
+			return {kind: 'lower', name, tail};
+		}
+		if(/^[A-Z0-9]+$/.test(t)){
+			const parts = [];
+			for(const ch of t){
+				if(/[A-Z]/.test(ch)) parts.push({type:'dig', name:ch});
+				else parts.push({type:'const', val: BigInt(ch)});
+			}
+			return {kind:'upperConcat', parts};
+		}
+		throw new Error('Érvénytelen atom: ' + t);
+	}
+	const PRE = { 'u-':4, '^':3, '*':2, '/':2, '+':1, '-':1 };
+	const RIGHT = { '^': true, 'u-': true };
+	function parseToAST(tokens){
+		const out = [], ops = [];
+		let prevIsOperand = false;
+		for(const tk of tokens){
+			if(tk.type === 'atom'){
+				out.push({type:'atom', atom: parseAtomStructure(tk.text)});
+				prevIsOperand = true;
+			}
+			else if(tk.type === 'op'){
+				let op = tk.text;
+				if(op === '-' && !prevIsOperand) op = 'u-';
+				while(ops.length){
+					const top = ops[ops.length-1];
+					if(top.type === 'op'){
+						const p1 = PRE[op], p2 = PRE[top.op];
+							if((RIGHT[op] ? p1 < p2 : p1 <= p2)){
+								ops.pop();
+								if(top.op === 'u-'){ const a = out.pop(); out.push({type:'un', op:'u-', right:a}); }
+								else { const b = out.pop(), a = out.pop(); out.push({type:'bin', op: top.op, left:a, right:b}); }
+								continue;
+							}
+						}
+						break;
+				}
+				ops.push({type:'op', op});
+				prevIsOperand = false;
+			}
+			else if(tk.type === 'paren'){
+				if(tk.text === '('){ ops.push({type:'paren'}); prevIsOperand = false; }
+				else {
+					let found = false;
+					while(ops.length){
+						const top = ops.pop();
+						if(top.type === 'paren'){ found = true; break; }
+						if(top.type === 'op'){
+							if(top.op === 'u-'){ const a = out.pop(); out.push({type:'un', op:'u-', right:a}); }
+							else { const b = out.pop(), a = out.pop(); out.push({type:'bin', op: top.op, left:a, right:b}); }
+						}
+					}
+					if(!found) throw new Error('Zárójel párhiba: hiányzik "("');
+					prevIsOperand = true;
+				}
+			}
+		}
+		while(ops.length){
+			const top = ops.pop();
+			if(top.type === 'paren') throw new Error('Zárójel párhiba: hiányzik ")"');
+			if(top.op === 'u-'){ const a = out.pop(); out.push({type:'un', op:'u-', right:a}); }
+			else { const b = out.pop(), a = out.pop(); out.push({type:'bin', op: top.op, left:a, right:b}); }
+		}
+		if(out.length !== 1) throw new Error('Parszolási hiba');
+		return out[0];
+	}
+	function gcd(a,b){ a = a < 0n ? -a : a; b = b < 0n ? -b : b; while(b !== 0n){ const t = a % b; a = b; b = t; } return a; }
+	function F(n,d=1n){ if(d===0n) throw new Error('Nullával osztás'); if(d<0n){ n=-n; d=-d; } const g = gcd(n,d); return {n: n/g, d: d/g}; }
+	function Fadd(a,b){ return F(a.n*b.d + b.n*a.d, a.d*b.d); }
+	function Fsub(a,b){ return F(a.n*b.d - b.n*a.d, a.d*b.d); }
+	function Fmul(a,b){ return F(a.n*b.n, a.d*b.d); }
+	function Fdiv(a,b){ if(b.n===0n) throw new Error('Nullával osztás'); return F(a.n*b.d, a.d*b.n); }
+	function evalAtom(atom, assignUpper, assignLower){
+		if(atom.kind === 'num') return F(atom.value, 1n);
+		if(atom.kind === 'lower'){
+			if(!(atom.name in assignLower)) return null;
+			let val = BigInt(assignLower[atom.name]);
+			if(atom.tail !== null) val = val * atom.tail;
+			return F(val, 1n);
+		}
+		if(atom.kind === 'upperConcat'){
+			let s = '';
+			for(const p of atom.parts){
+				if(p.type === 'const'){ s += p.val.toString(); }
+				else {
+					if(!(p.name in assignUpper)) return null;
+					s += String(assignUpper[p.name]);
+				}
+			}
+			return F(BigInt(s), 1n);
+		}
+		throw new Error('Ismeretlen atom típus');
+	}
+	function evalAST(node, assignUpper, assignLower){
+		if(node.type === 'atom') return evalAtom(node.atom, assignUpper, assignLower);
+		if(node.type === 'un'){
+			const R = evalAST(node.right, assignUpper, assignLower);
+			if(!R) return null;
+			return F(-R.n, R.d);
+		}
+		const L = evalAST(node.left, assignUpper, assignLower);
+		const R = evalAST(node.right, assignUpper, assignLower);
+		if(!L || !R) return null;
+		switch(node.op){
+			case '+': return Fadd(L,R);
+			case '-': return Fsub(L,R);
+			case '*': return Fmul(L,R);
+			case '/': return Fdiv(L,R);
+			case '^': throw new Error('Hatványozás nem támogatott itt');
+			default: throw new Error('Ismeretlen operátor: '+node.op);
+		}
+	}
+	function evalSafe(node, assignUpper, assignLower){
+		try{ return evalAST(node, assignUpper, assignLower); }catch(e){ return {error:e}; }
+	}
+	function parseSystem(text){
+		const lines = text.split(/\r?\n|;/).map(s=>s.trim()).filter(Boolean);
+		if(lines.length === 0) throw new Error('Nincs megadva egyenlet.');
+		const eqs = [];
+		for(const L of lines){
+			const parts = L.split('=');
+			if(parts.length !== 2) throw new Error('Minden egyenlet pontosan egy "=" kell hogy tartalmazzon: ' + L);
+			const left = parseToAST(tokenizeExpr(parts[0].trim()));
+			const right = parseToAST(tokenizeExpr(parts[1].trim()));
+			eqs.push({raw:L, left, right});
+		}
+		return eqs;
+	}
+	function collectVars(eqs){
+		const upp = new Set(), low = new Set();
+		function walk(n){
+			if(n.type === 'atom'){
+				const a = n.atom;
+				if(a.kind === 'lower') low.add(a.name);
+				if(a.kind === 'upperConcat') for(const p of a.parts) if(p.type==='dig') upp.add(p.name);
+				return;
+			}
+			if(n.type === 'un'){ walk(n.right); return; }
+			walk(n.left); walk(n.right);
+		}
+		for(const e of eqs){ walk(e.left); walk(e.right); }
+		return {upper: Array.from(upp), lower: Array.from(low)};
+	}
+	function linearizeNode(node, assignUpper){
+		if(node.type === 'atom'){
+			const a = node.atom;
+			if(a.kind === 'num')
+			return {coeff:new Map(), const:F(a.value,1n), nonLinear:false};
+			if(a.kind === 'upperConcat'){
+				let s='';
+				for(const p of a.parts){
+					if(p.type==='const') s+=p.val.toString();
+					else{
+						if(!(p.name in assignUpper)) return {nonLinear:true};
+						s+=assignUpper[p.name];
+					}
+				}
+				return {coeff:new Map(), const:F(BigInt(s),1n), nonLinear:false};
+			}
+			if(a.kind === 'lower'){
+				const m=new Map();
+				const mul = a.tail ? a.tail : 1n;
+				m.set(a.name, F(mul,1n));
+				return {coeff:m, const:F(0n,1n), nonLinear:false};
+			}
+		}
+		if(node.type === 'un'){
+			const R = linearizeNode(node.right, assignUpper);
+			if(R.nonLinear) return {nonLinear:true};
+			const out=new Map();
+			for(const [k,v] of R.coeff)
+			out.set(k, F(-v.n,v.d));
+			return {coeff:out, const:F(-R.const.n,R.const.d), nonLinear:false};
+		}
+		const L = linearizeNode(node.left, assignUpper);
+		const R = linearizeNode(node.right, assignUpper);
+		if(L.nonLinear || R.nonLinear) return {nonLinear:true};
+		if(node.op==='+' || node.op==='-'){
+			const res=new Map();
+			for(const [k,v] of L.coeff) res.set(k,v);
+			for(const [k,v] of R.coeff){
+				const cur=res.get(k)||F(0n,1n);
+				res.set(k, node.op==='+'?Fadd(cur,v):Fsub(cur,v));
+			}
+			return {
+				coeff:res,
+				const: node.op==='+'?Fadd(L.const,R.const):Fsub(L.const,R.const),
+				nonLinear:false
+			};
+		}
+		if(node.op==='*'){
+			const Lconst = L.coeff.size===0;
+			const Rconst = R.coeff.size===0;
+			if(Lconst && Rconst)
+			return {coeff:new Map(), const:Fmul(L.const,R.const), nonLinear:false};
+			if(Lconst){
+				const res=new Map();
+				for(const [k,v] of R.coeff)
+				res.set(k, Fmul(v,L.const));
+				return {coeff:res, const:Fmul(R.const,L.const), nonLinear:false};
+			}
+			if(Rconst){
+				const res=new Map();
+				for(const [k,v] of L.coeff)
+				res.set(k, Fmul(v,R.const));
+				return {coeff:res, const:Fmul(L.const,R.const), nonLinear:false};
+			}
+			return {nonLinear:true};
+		}
+		if(node.op==='/'){
+			if(R.coeff.size!==0) return {nonLinear:true};
+			const res=new Map();
+			for(const [k,v] of L.coeff)
+			res.set(k, Fdiv(v,R.const));
+			return {coeff:res, const:Fdiv(L.const,R.const), nonLinear:false};
+		}
+		return {nonLinear:true};
+	}
+	function solveLinearFractions(A, b){
+		const m = A.length;
+		if(m === 0) return null;
+		const n = A[0].length;
+		const M = new Array(m);
+		for(let i=0;i<m;i++){ M[i] = new Array(n+1); for(let j=0;j<n;j++) M[i][j] = A[i][j]; M[i][n] = b[i]; }
+		let row = 0;
+		for(let col=0; col<n && row < m; col++){
+			let sel = -1;
+			for(let i=row;i<m;i++) if(M[i][col].n !== 0n){ sel = i; break; }
+			if(sel === -1) continue;
+			[M[row], M[sel]] = [M[sel], M[row]];
+			const piv = M[row][col];
+			for(let j=col;j<=n;j++) M[row][j] = Fdiv(M[row][j], piv);
+			for(let i=0;i<m;i++){
+				if(i === row) continue;
+				const factor = M[i][col];
+				if(factor.n === 0n) continue;
+				for(let j=col;j<=n;j++){
+					M[i][j] = Fsub(M[i][j], Fmul(factor, M[row][j]));
+				}
+			}
+			row++;
+		}
+		for(let i=0;i<m;i++){
+			let allzero = true;
+			for(let j=0;j<n;j++) if(M[i][j].n !== 0n){ allzero = false; break; }
+			if(allzero && M[i][n].n !== 0n) return null;
+		}
+		let rank = 0;
+		for(let i=0;i<m;i++){
+			let nz=false;
+			for(let j=0;j<n;j++) if(M[i][j].n !== 0n){ nz=true; break; }
+			if(nz) rank++;
+		}
+		if(rank < n) return null;
+		const sol = new Array(n).fill(null);
+		for(let i=0;i<m;i++){
+			let lead = -1;
+			for(let j=0;j<n;j++) if(M[i][j].n !== 0n){ lead = j; break; }
+			if(lead === -1) continue;
+			sol[lead] = M[i][n];
+		}
+		for(let j=0;j<n;j++) if(sol[j] === null) return null;
+		return {sol};
+	}
+	function deduceLowers(eqs, assignUpper, lowerNames, minV, maxV, maxList){
+		if(lowerNames.length === 0) return [{}];
+		const rowsA = [], rowsB = [];
+		for(const eq of eqs){
+			const L = linearizeNode(eq.left, assignUpper);
+			const R = linearizeNode(eq.right, assignUpper);
+			if(L.nonLinear || R.nonLinear) continue;
+			const row = new Array(lowerNames.length).fill(F(0n,1n));
+			for(const [k,v] of L.coeff) {
+				const idx = lowerNames.indexOf(k);
+				if(idx === -1) return null;
+				row[idx] = Fadd(row[idx], v);
+			}
+			for(const [k,v] of R.coeff){
+				const idx = lowerNames.indexOf(k);
+				if(idx === -1) return null;
+				row[idx] = Fsub(row[idx], v);
+			}
+			const rhs = Fsub(R.const, L.const);
+			let allZero = true;
+			for(const c of row) if(c.n !== 0n){ allZero = false; break; }
+			if(allZero){
+				if(rhs.n !== 0n) return null;
+				else continue;
+			}
+			rowsA.push(row);
+			rowsB.push(rhs);
+		}
+		if(rowsA.length === 0){
+			const N = lowerNames.length;
+			if(N === 0) return [{}];
+			const results = [];
+			const assign = {};
+			function dfsEnum(idx){
+				if(results.length >= maxList) return;
+				if(idx === N){
+					const out = {};
+					for(let i=0;i<N;i++) out[lowerNames[i]] = BigInt(assign[i]);
+					results.push(out);
+					return;
+				}
+				for(let v = minV; v <= maxV; v++){
+					assign[idx] = v;
+					dfsEnum(idx+1);
+					if(results.length >= maxList) return;
+				}
+			}
+			dfsEnum(0);
+			return results;
+		}
+		const A = [];
+		for(const r of rowsA){
+			A.push(r.map(x=>x));
+		}
+		const B = rowsB.map(x=>x);
+		const solRes = solveLinearFractions(A, B);
+		if(solRes === null){
+			const intA = [];
+			const intB = [];
+			for(let i=0;i<A.length;i++){
+					let l = 1n;
+					for(const c of A[i]) l = (l * c.d) / gcd(l, c.d);
+					l = (l * B[i].d) / gcd(l, B[i].d);
+				const rowInt = A[i].map(c => (c.n * (l / c.d)));
+						const rhsInt = B[i].n * (l / B[i].d);
+				intA.push(rowInt);
+				intB.push(rhsInt);
+			}
+			const rows = intA.length, cols = lowerNames.length;
+			const M = Array.from({length:rows}, (_,i)=> intA[i].slice().concat([intB[i]]));
+			let r = 0;
+			const pivotAt = Array(cols).fill(-1);
+			for(let c=0;c<cols && r<rows;c++){
+				let sel = -1;
+				for(let i=r;i<rows;i++) if(M[i][c] !== 0n){ sel = i; break; }
+				if(sel === -1) continue;
+				[M[r], M[sel]] = [M[sel], M[r]];
+				const piv = M[r][c];
+				for(let i=0;i<rows;i++){
+					if(i===r) continue;
+					const f = M[i][c];
+					if(f === 0n) continue;
+					for(let j=c;j<=cols;j++){
+						M[i][j] = M[i][j]*piv - M[r][j]*f;
+					}
+				}
+					pivotAt[c] = r;
+				r++;
+			}
+			const freeIdx = [];
+			for(let c=0;c<cols;c++) if(pivotAt[c] === -1) freeIdx.push(c);
+			for(let i=0;i<rows;i++){
+				let allZero = true;
+				for(let j=0;j<cols;j++) if(M[i][j] !== 0n){ allZero = false; break; }
+				if(allZero && M[i][cols] !== 0n) return null;
+			}
+			const results = [];
+			const Nfree = freeIdx.length;
+			if(Nfree === 0) return null;
+			function tryFreeAssign(freeAssign){
+				const A2 = [];
+				const B2 = [];
+				for(let i=0;i<rows;i++){
+					let rhs = B[i];
+					const rowCoeffs = [];
+					for(let j=0;j<cols;j++){
+						rowCoeffs.push(A[i][j]);
+					}
+					for(const idx of freeIdx){
+						const val = F(BigInt(freeAssign[idx]), 1n);
+						rhs = Fsub(rhs, Fmul(rowCoeffs[idx], val));
+					}
+					const newRow = [];
+						for(let j=0;j<cols;j++) if(!freeIdx.includes(j)) newRow.push(rowCoeffs[j]);
+					A2.push(newRow);
+					B2.push(rhs);
+				}
+				const nonFreeIdx = [];
+				for(let j=0;j<cols;j++) if(!freeIdx.includes(j)) nonFreeIdx.push(j);
+				if(nonFreeIdx.length === 0){
+					const sol = {};
+					for(let j=0;j<cols;j++){
+						if(freeIdx.includes(j)) sol[ lowerNames[j] ] = BigInt(freeAssign[j]);
+						else sol[ lowerNames[j] ] = 0n;
+					}
+					results.push(sol);
+					return;
+				}
+				const A2full = [];
+				for(let i=0;i<A2.length;i++){
+					const row = [];
+					for(const j of nonFreeIdx) row.push(A2[i][j]);
+					A2full.push(row);
+				}
+				const solR = solveLinearFractions(A2full, B2);
+				if(solR === null) return;
+				const solArr = solR.sol;
+				const full = {};
+				for(let k=0;k<cols;k++){
+					if(freeIdx.includes(k)) full[ lowerNames[k] ] = BigInt(freeAssign[k]);
+				}
+				for(let t=0;t<nonFreeIdx.length;t++){
+					const idx = nonFreeIdx[t];
+					const f = solArr[t];
+					if(f.d !== 1n) return;
+					full[ lowerNames[idx] ] = f.n;
+				}
+				results.push(full);
+			}
+			let stop = false;
+			const stack = [];
+			function dfsFree(pos){
+				if(stop) return;
+				if(pos === freeIdx.length){
+					const freeAssign = {};
+					for(let i=0;i<freeIdx.length;i++) freeAssign[ freeIdx[i] ] = stack[i];
+					tryFreeAssign(freeAssign);
+					if(results.length >= maxList) stop = true;
+					return;
+				}
+				for(let v=minV; v<=maxV; v++){
+					stack[pos] = v;
+					dfsFree(pos+1);
+					if(stop) return;
+				}
+			}
+			dfsFree(0);
+			return results;
+		}
+		else {
+			const sol = solRes.sol;
+			const out = {};
+			for(let i=0;i<sol.length;i++){
+				const f = sol[i];
+				if(f.d !== 1n) return null;
+				out[ lowerNames[i] ] = f.n;
+				if(out[ lowerNames[i] ] < BigInt(minV) || out[ lowerNames[i] ] > BigInt(maxV)) return null;
+			}
+			return [out];
+		}
+	}
+	const solveBtn = document.getElementById('solveBtn');
+	const stopBtn = document.getElementById('stopBtn');
+	const statusEl = document.getElementById('status');
+	const solBox = document.getElementById('solutions');
+	const summary = document.getElementById('summary');
+	let shouldStop = false;
+	stopBtn.onclick = ()=>{ shouldStop = true; statusEl.textContent = 'Megszakítás folyamatban...'; };
+	solveBtn.onclick = async ()=>{
+		shouldStop = false;
+		solBox.innerHTML = '';
+		summary.textContent = '';
+		statusEl.textContent = 'Előkészítés...';
+		solveBtn.disabled = true; stopBtn.disabled = false;
+		setTimeout(async ()=>{ try { await runSolve();} finally { solveBtn.disabled = false; stopBtn.disabled = true;}}, 20);
+	};
+	async function runSolve(){
+		solBox.innerHTML = ''; summary.textContent = '';
+		statusEl.textContent = 'Parszolás...';
+		let eqs;
+		try{ eqs = parseSystem(document.getElementById('input').value); }
+		catch(e){ statusEl.textContent = 'Parszolási hiba: ' + e.message; return; }
+		const {upper, lower} = collectVars(eqs);
+		if(upper.length > 10){ statusEl.textContent = 'Több mint 10 különböző nagybetű: nem megoldható (0..9 korlát).'; return; }
+		const minV = Number(document.getElementById('lmin').value);
+		const maxV = Number(document.getElementById('lmax').value);
+		const maxList = Math.max(1, Number(document.getElementById('maxList').value)||5000);
+		if(Number.isNaN(minV) || Number.isNaN(maxV) || minV > maxV){ statusEl.textContent = 'Érvénytelen tartomány.'; return; }
+		statusEl.textContent = `Keresés: ${upper.length} nagybetű; ${lower.length} kisbetű (tartomány ${minV}..${maxV}) — fut...`;
+		const letters = upper.slice();
+		const freq = {}; for(const L of letters) freq[L] = 0;
+		function countFreq(n){
+			if(n.type==='atom'){ if(n.atom.kind==='upperConcat'){ for(const p of n.atom.parts) if(p.type==='dig') freq[p.name]++; } return; }
+			if(n.type==='un') return countFreq(n.right);
+			countFreq(n.left); countFreq(n.right);
+		}
+		for(const e of eqs){ countFreq(e.left); countFreq(e.right); }
+		letters.sort((a,b)=> freq[b]-freq[a]);
+		const used = new Array(10).fill(false);
+		const assignUpper = {};
+		const solutions = [];
+		let nodes = 0;
+		const YIELD = 1000;
+		let steps = 0;
+		async function dfs(idx){
+			if(shouldStop) return;
+			if(idx === letters.length){
+				nodes++; steps++;
+				const lowerRes = deduceLowers(eqs, assignUpper, lower, minV, maxV, maxList);
+				if(lowerRes && lowerRes.length > 0){
+					for(const lr of lowerRes){
+						solutions.push({upper: Object.assign({}, assignUpper), lower: lr});
+						if(solutions.length >= maxList){ shouldStop = true; break; }
+					}
+				}
+				if(steps >= YIELD){ steps = 0; await new Promise(r=>setTimeout(r,0)); }
+				return;
+			}
+			nodes++; steps++;
+			if(steps >= YIELD){ steps = 0; await new Promise(r=>setTimeout(r,0)); if(shouldStop) return; }
+			const L = letters[idx];
+			for(let d=0; d<=9; d++){
+				if(shouldStop) return;
+				if(used[d]) continue;
+				used[d] = true;
+				assignUpper[L] = d;
+				let prune = false;
+				for(const eq of eqs){
+					const Le = evalSafe(eq.left, assignUpper, {});
+					const Re = evalSafe(eq.right, assignUpper, {});
+					if(Le && Le.error) { prune = true; break; }
+					if(Re && Re.error) { prune = true; break; }
+					if(Le && Re && Le.n !== undefined && Re.n !== undefined){
+						if(Le.d === 1n && Re.d === 1n){
+							if(Le.n !== Re.n){ prune = true; break; }
+						}
+					}
+				}
+				if(!prune) await dfs(idx+1);
+				used[d] = false; delete assignUpper[L];
+				if(shouldStop) return;
+			}
+		}
+		await dfs(0);
+		stopBtn.disabled = true;
+		statusEl.textContent = `Kész: talált megoldások: ${solutions.length}. Ellenőrzött csomópontok: ${nodes}.`;
+		if(solutions.length === 0){ summary.textContent = 'Nincs megoldás.'; return; }
+		summary.textContent = `Megoldások száma: ${solutions.length}${solutions.length>=maxList? ' (lista korlátozva)':''}.`;
+		solBox.innerHTML = '';
+		for(let i=0;i<solutions.length;i++){
+			const s = solutions[i];
+			const div = document.createElement('div'); div.className = 'solution';
+			const up = Object.keys(s.upper).sort().map(k=>k+'='+s.upper[k]).join(', ');
+			const low = Object.keys(s.lower).sort().map(k=>k+'='+s.lower[k].toString()).join(', ');
+			const eqHtml = eqs.map(eq=>{
+				function renderNode(n){
+					if(n.type==='atom'){
+						const a=n.atom;
+						if(a.kind==='num') return a.value.toString();
+						if(a.kind==='upperConcat') return a.parts.map(p=> p.type==='const' ? p.val.toString() : s.upper[p.name]).join('');
+						if(a.kind==='lower') return (s.lower[a.name] !== undefined ? s.lower[a.name].toString() : a.name);
+					}
+					if(n.type==='un') return '(-' + renderNode(n.right) + ')';
+					return '(' + renderNode(n.left) + ' ' + n.op + ' ' + renderNode(n.right) + ')';
+				}
+				const Ls = renderNode(eq.left); const Rs = renderNode(eq.right);
+				const Lval = evalAST(eq.left, s.upper, s.lower);
+				const Rval = evalAST(eq.right, s.upper, s.lower);
+				function fracStr(f){ if(!f) return 'n/a'; return f.d===1n? f.n.toString() : f.n.toString()+'/'+f.d.toString(); }
+				return `${eq.raw}	→	${Ls} = ${Rs} `;
+			})
+			.join('<br>');
+			div.innerHTML = `<b>#${i+1}</b> — Nagybetűk: ${up} | Kisbetűk: ${low}<br><span class="small">${eqHtml}</span>`;
+			solBox.appendChild(div);
+		}
+	}
 </script>
 </body>
 </html>
